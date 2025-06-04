@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+#dbinitalization
+
 """
 Initialize the database with the required tables.
 """
