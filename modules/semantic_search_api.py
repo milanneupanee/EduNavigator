@@ -1,11 +1,9 @@
 import logging
-import sqlite3
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-
 from utils.gemini_utils import generate_embedding
-from utils.db_utils import search_vector_similarity
+from utils.db_utils import search_vector_similarity, get_synced_conn
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,9 +35,6 @@ class SearchResponse(BaseModel):
     universities: List[University] = []
     courses: List[Course] = []
 
-# Global database path
-DB_PATH = "data/database.db"
-
 @app.get("/search", response_model=SearchResponse)
 async def search(
     query: str = Query(..., description="Search query"),
@@ -61,7 +56,7 @@ async def search(
     universities = []
     courses = []
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_synced_conn()
     try:
         if search_type in ["all", "universities"]:
             universities = search_vector_similarity(conn, "university", embedding, limit=limit)
@@ -83,18 +78,14 @@ async def search(
     
     return response
 
-def run_api(db_path: str, host: str = "0.0.0.0", port: int = 8000):
+def run_api(host: str = "0.0.0.0", port: int = 8000):
     """
     Run the semantic search API.
     
     Args:
-        db_path: Path to SQLite database
         host: Host to bind the server to
         port: Port to bind the server to
     """
-    global DB_PATH
-    DB_PATH = db_path
-    
     import uvicorn
     uvicorn.run(app, host=host, port=port)
 
@@ -103,13 +94,12 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Semantic search API for university and course data')
-    parser.add_argument('--db-path', type=str, default='data/database.db', help='Path to SQLite database')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind the server to')
     parser.add_argument('--port', type=int, default=8000, help='Port to bind the server to')
     
     args = parser.parse_args()
     
-    run_api(args.db_path, args.host, args.port)
+    run_api(args.host, args.port)
 
 if __name__ == '__main__':
     main() 
