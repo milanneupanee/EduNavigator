@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from langchain.schema import StrOutputParser
 from pydantic import SecretStr
 from consts import DIMENSION
-import sqlite_vec
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -30,20 +29,25 @@ embedding_model = GoogleGenerativeAIEmbeddings(
 
 # Define Pydantic models for structured data extraction
 class UniversityCourseData(BaseModel):
-    university_name: str = Field(description="Name of the university")
-    university_description: str = Field(description="Description of the university")
-    country: str = Field(description="Country where the university is located")
-    course_name: str = Field(description="Name of the course")
-    description: str = Field(description="Description of the course")
-    degree_type: str = Field(description="Type of degree (bachelor or masters)")
-    starting_date: str = Field(description="Starting date of the course")
-    duration: str = Field(description="Duration of the course")
-    scholarship: str = Field(description="Scholarship information if available")
-    fee_structure: Optional[str] = Field(
-        description="Fee structure of the course", default=None
-    )
-    language_of_study: str = Field(description="Language in which the course is taught")
-    field_of_study: str = Field(description="Field of study for the course")
+    class University(BaseModel):
+        university_name: str = Field(description="Name of the university")
+        university_description: str = Field(description="Description of the university")
+        country: str = Field(description="Country where the university is located")
+        course_name: str = Field(description="Name of the course")
+        description: str = Field(description="Description of the course")
+        degree_type: str = Field(description="Type of degree (bachelor or masters)")
+        starting_date: str = Field(description="Starting date of the course")
+        duration: str = Field(description="Duration of the course")
+        scholarship: str = Field(description="Scholarship information if available")
+        fee_structure: Optional[str] = Field(
+            description="Fee structure of the course", default=None
+        )
+        language_of_study: str = Field(
+            description="Language in which the course is taught"
+        )
+        field_of_study: str = Field(description="Field of study for the course")
+
+    universities: List[University] = []
 
 
 class QueryIntent(BaseModel):
@@ -51,6 +55,7 @@ class QueryIntent(BaseModel):
         description="Whether the query requires university/course data lookup"
     )
     reason: str = Field(description="Reason for the classification")
+    target: str = Field(description="What the query is about: 'university', 'course', or 'both'")
 
 
 def extract_structured_data(content: str) -> Optional[Dict[str, Any]]:
@@ -93,80 +98,66 @@ def extract_structured_data(content: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def generate_embedding(text: str, task_type: str) -> Optional[bytes]:
+def generate_embedding(text: str, task_type: str) -> Optional[List[float]]:
     """
-    Generate embedding vector for text using LangChain and serialize it for SQLite.
-
+    Generate embedding vector for text using LangChain.
     Args:
         text: Text to generate embedding for
-
     Returns:
-        Serialized embedding vector as bytes or None if generation failed
+        Embedding vector as a list of floats, or None if generation failed
     """
     try:
         # Generate embedding using LangChain
         embedding_list = embedding_model.embed_query(
             text, task_type=task_type, output_dimensionality=DIMENSION
         )
-
-        # Log the dimension for debugging
         logger.info(f"Generated embedding with dimension: {len(embedding_list)}")
-
         # Ensure consistent dimension (truncate or pad if necessary)
-        expected_dimension = DIMENSION# Set this to match your database
-
-        # Serialize the embedding for SQLite storage using struct.pack
-        import struct
-
-        serialized_embedding = struct.pack(f"{expected_dimension}f", *embedding_list)
-
-        return serialized_embedding
-
+        expected_dimension = DIMENSION
+        if len(embedding_list) > expected_dimension:
+            embedding_list = embedding_list[:expected_dimension]
+        elif len(embedding_list) < expected_dimension:
+            embedding_list += [0.0] * (expected_dimension - len(embedding_list))
+        return embedding_list
     except Exception as e:
         logger.error(f"Error generating embedding: {str(e)}")
         return None
 
 
-def classify_query_intent(query: str) -> bool:
+def classify_query_intent(query: str) -> dict:
     """
-    Classify if a query requires university/course data lookup using LangChain.
-
+    Classify if a query requires university/course data lookup using LangChain, and what it is about.
     Args:
         query: User query string
-
     Returns:
-        True if data lookup is required, False otherwise
+        Dict with keys: requires_lookup (bool), target ('university', 'course', or 'both'), reason (str)
     """
     try:
-        # Create a parser for the query intent
         parser = PydanticOutputParser(pydantic_object=QueryIntent)
-
-        # Create a prompt template
         prompt = PromptTemplate(
             template="""
-            Determine if the following query is asking about universities, courses, or education information
-            that would require looking up specific data about universities or courses.
+            Determine if the following query is asking about universities, courses, or both, and whether it requires looking up specific data about universities or courses.
             
             Query: {query}
             
-            If the query is asking about general information that doesn't require specific university or course data,
-            classify it as not requiring lookup.
+            If the query is asking about general information that doesn't require specific university or course data, classify it as not requiring lookup.
+            
+            Respond with:
+            - requires_lookup: true/false
+            - target: 'university', 'course', or 'both'
+            - reason: short explanation
             
             {format_instructions}
             """,
             input_variables=["query"],
             partial_variables={"format_instructions": parser.get_format_instructions()},
         )
-
-        # Create and run the chain
         chain = prompt | llm | parser
-
         result = chain.invoke({"query": query})
-        return result.requires_lookup
-
+        return result.dict()
     except Exception as e:
         logger.error(f"Error classifying query intent: {str(e)}")
-        return False
+        return {"requires_lookup": False, "target": "unknown", "reason": str(e)}
 
 
 def generate_chat_response(query: str, context: Optional[Dict[str, Any]] = None) -> str:
