@@ -179,8 +179,10 @@ def generate_chat_response(query: str, context: Optional[Dict[str, Any]] = None)
             if context.get("universities"):
                 universities_text = "Universities:\n"
                 for i, univ in enumerate(context["universities"], 1):
-                    universities_text += f"{i}. {univ['name']} ({univ['country']})\n"
-                    universities_text += f"   Description: {univ['description']}\n\n"
+                    universities_text += f"{i}. {univ['university_name']} ({univ['country']})\n"
+                    # Use campus_facilities as description if available, otherwise use a default
+                    description = univ.get('campus_facilities', 'Information available upon request')
+                    universities_text += f"   Description: {description}\n\n"
 
             # Format courses
             courses_text = ""
@@ -191,8 +193,8 @@ def generate_chat_response(query: str, context: Optional[Dict[str, Any]] = None)
                         f"{i}. {course['name']} at {course['university_name']}\n"
                     )
                     courses_text += f"   Degree: {course['degree_type']}, Field: {course['field_of_study']}\n"
-                    courses_text += f"   Duration: {course['duration']}, Starting: {course['starting_date']}\n"
-                    courses_text += f"   Language: {course['language_of_study']}, Fees: {course['fee_structure']}\n"
+                    courses_text += f"   Duration: {course['duration']}, Fees: {course['tuition_fee']}\n"
+                    courses_text += f"   Application Deadline: {course['application_deadline']}\n"
                     courses_text += f"   Description: {course['description']}\n\n"
 
             # Combine context
