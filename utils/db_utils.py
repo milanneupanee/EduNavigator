@@ -10,11 +10,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def get_synced_conn():
+    """
+    Get a database connection using libsql.
+    For Turso cloud databases, use the URL and auth_token.
+    For local development, use a local file.
+    """
     url = os.getenv("TURSO_DATABASE_URL")
     auth_token = os.getenv("TURSO_AUTH_TOKEN")
-    conn = libsql.connect("local.db", sync_url=url, auth_token=auth_token)
-    conn.sync()
-    return conn
+    
+    # For testing, use local SQLite if Turso is not available
+    if not url or not auth_token:
+        print("Warning: Using local SQLite database for testing")
+        return libsql.connect("local.db")
+    
+    try:
+        print(f"Connecting to Turso database: {url}")
+        conn = libsql.connect('local.db', sync_url=url, auth_token=auth_token)
+        return conn
+    except Exception as e:
+        print(f"Warning: Failed to connect to Turso: {e}")
+        print("Falling back to local SQLite database for testing")
+        return libsql.connect("local.db")
 
 def initialize_database():
     """
@@ -24,17 +40,34 @@ def initialize_database():
     conn = get_synced_conn()
     try:
         cursor = conn.cursor()
+        cursor.execute("""select 1""")
+        result = cursor.fetchone()
+        print(f"Connection successful! Result: {result}")
         cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS universities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
             country TEXT,
-            description TEXT,
-            embedding F32_BLOB({DIMENSION}),
+            university_name TEXT NOT NULL,
+            city TEXT,
+            university_url TEXT,
+            undergraduate_programs TEXT,
+            graduate_programs TEXT,
+            tuition_undergrad TEXT,
+            tuition_grad TEXT,
+            living_cost TEXT,
+            application_deadlines TEXT,
+            admission_requirements TEXT,
+            scholarships_international TEXT,
+            scholarships_nepali TEXT,
+            campus_facilities TEXT,
+            embedding BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        cursor.execute("""select 2""")
+        result = cursor.fetchone()
+        print(f"Connection successful! Result: {result}")
         cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS courses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,24 +75,29 @@ def initialize_database():
             name TEXT NOT NULL,
             description TEXT,
             degree_type TEXT,
-            starting_date TEXT,
-            duration TEXT,
-            scholarship TEXT,
-            fee_structure TEXT,
-            language_of_study TEXT,
             field_of_study TEXT,
-            embedding F32_BLOB({DIMENSION}),
+            duration TEXT,
+            tuition_fee TEXT,
+            application_deadline TEXT,
+            admission_requirements TEXT,
+            scholarships TEXT,
+            embedding BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (university_id) REFERENCES universities (id)
         )
         """)
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS universities_embedding_idx ON universities (libsql_vector_idx(embedding));
-        """)
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS courses_embedding_idx ON courses (libsql_vector_idx(embedding));
-        """)
+        # Create vector indexes separately
+        try:
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS universities_embedding_idx ON universities (libsql_vector_idx(embedding));
+            """)
+            cursor.execute("""
+            CREATE INDEX IF NOT EXISTS courses_embedding_idx ON courses (libsql_vector_idx(embedding));
+            """)
+        except Exception as e:
+            logger.warning(f"Could not create vector indexes: {e}")
+            logger.info("Tables created successfully without vector indexes")
         conn.commit()
         logger.info("Database and vector indexes initialized successfully.")
     except Exception as e:
@@ -72,8 +110,8 @@ def initialize_database():
 def insert_university(conn, data: Dict[str, Any]) -> int:
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id FROM universities WHERE name = ? AND country = ?",
-        (data["name"], data["country"]),
+        "SELECT id FROM universities WHERE university_name = ? AND country = ?",
+        (data["university_name"], data["country"]),
     )
     result = cursor.fetchone()
     embedding_str = data.get("embedding")
@@ -84,22 +122,61 @@ def insert_university(conn, data: Dict[str, Any]) -> int:
         cursor.execute(
             f"""
             UPDATE universities
-            SET description = ?, embedding = vector(?), updated_at = CURRENT_TIMESTAMP
+            SET city = ?, university_url = ?, undergraduate_programs = ?, graduate_programs = ?,
+                tuition_undergrad = ?, tuition_grad = ?, living_cost = ?, application_deadlines = ?,
+                admission_requirements = ?, scholarships_international = ?, scholarships_nepali = ?,
+                campus_facilities = ?, embedding = vector(?), updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (data["description"], embedding_str, university_id),
+            (
+                data.get("city"),
+                data.get("university_url"),
+                data.get("undergraduate_programs"),
+                data.get("graduate_programs"),
+                data.get("tuition_undergrad"),
+                data.get("tuition_grad"),
+                data.get("living_cost"),
+                data.get("application_deadlines"),
+                data.get("admission_requirements"),
+                data.get("scholarships_international"),
+                data.get("scholarships_nepali"),
+                data.get("campus_facilities"),
+                embedding_str,
+                university_id,
+            ),
         )
-        logger.info(f"Updated university: {data['name']}")
+        logger.info(f"Updated university: {data['university_name']}")
     else:
         cursor.execute(
             f"""
-            INSERT INTO universities (name, country, description, embedding)
-            VALUES (?, ?, ?, vector(?))
+            INSERT INTO universities (
+                country, university_name, city, university_url, undergraduate_programs,
+                graduate_programs, tuition_undergrad, tuition_grad, living_cost,
+                application_deadlines, admission_requirements, scholarships_international,
+                scholarships_nepali, campus_facilities, embedding
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, vector(?))
             """,
-            (data["name"], data["country"], data["description"], embedding_str),
+            (
+                data.get("country"),
+                data["university_name"],
+                data.get("city"),
+                data.get("university_url"),
+                data.get("undergraduate_programs"),
+                data.get("graduate_programs"),
+                data.get("tuition_undergrad"),
+                data.get("tuition_grad"),
+                data.get("living_cost"),
+                data.get("application_deadlines"),
+                data.get("admission_requirements"),
+                data.get("scholarships_international"),
+                data.get("scholarships_nepali"),
+                data.get("campus_facilities"),
+                embedding_str,
+            ),
         )
         university_id = cursor.lastrowid
-        logger.info(f"Inserted new university: {data['name']}")
+        logger.info(f"Inserted new university: {data['university_name']}")
     assert university_id is not None, "Failed to retrieve university ID after insertion"
     return university_id
 
@@ -118,20 +195,20 @@ def insert_course(conn, data: Dict[str, Any]) -> int:
         cursor.execute(
             f"""
             UPDATE courses
-            SET description = ?, degree_type = ?, starting_date = ?,
-                duration = ?, scholarship = ?, fee_structure = ?,
-                language_of_study = ?, field_of_study = ?, embedding = vector(?), updated_at = CURRENT_TIMESTAMP
+            SET description = ?, degree_type = ?, field_of_study = ?, duration = ?,
+                tuition_fee = ?, application_deadline = ?, admission_requirements = ?,
+                scholarships = ?, embedding = vector(?), updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
             (
-                data["description"],
-                data["degree_type"],
-                data["starting_date"],
-                data["duration"],
-                data["scholarship"],
-                data["fee_structure"],
-                data["language_of_study"],
-                data["field_of_study"],
+                data.get("description"),
+                data.get("degree_type"),
+                data.get("field_of_study"),
+                data.get("duration"),
+                data.get("tuition_fee"),
+                data.get("application_deadline"),
+                data.get("admission_requirements"),
+                data.get("scholarships"),
                 embedding_str,
                 course_id,
             ),
@@ -141,22 +218,23 @@ def insert_course(conn, data: Dict[str, Any]) -> int:
         cursor.execute(
             f"""
             INSERT INTO courses (
-                university_id, name, description, degree_type, starting_date,
-                duration, scholarship, fee_structure, language_of_study, field_of_study, embedding
+                university_id, name, description, degree_type, field_of_study,
+                duration, tuition_fee, application_deadline, admission_requirements,
+                scholarships, embedding
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, vector(?))
             """,
             (
                 data["university_id"],
                 data["name"],
-                data["description"],
-                data["degree_type"],
-                data["starting_date"],
-                data["duration"],
-                data["scholarship"],
-                data["fee_structure"],
-                data["language_of_study"],
-                data["field_of_study"],
+                data.get("description"),
+                data.get("degree_type"),
+                data.get("field_of_study"),
+                data.get("duration"),
+                data.get("tuition_fee"),
+                data.get("application_deadline"),
+                data.get("admission_requirements"),
+                data.get("scholarships"),
                 embedding_str,
             ),
         )
@@ -165,7 +243,7 @@ def insert_course(conn, data: Dict[str, Any]) -> int:
     assert course_id is not None, "Failed to retrieve course ID after insertion"
     return course_id
 
-def search_vector_similarity(conn, entity_type: str, query_embedding, limit: int = 5, query_text: str = None) -> List[Dict[str, Any]]:
+def search_vector_similarity(conn, entity_type: str, query_embedding, limit: int = 5, query_text: str | None = None) -> List[Dict[str, Any]]:
     cursor = conn.cursor()
     if isinstance(query_embedding, list):
         embedding_str = str(query_embedding)
@@ -174,7 +252,12 @@ def search_vector_similarity(conn, entity_type: str, query_embedding, limit: int
     if entity_type == "university":
         cursor.execute(
             """
-            SELECT u.id, u.name, u.country, u.description, vector_distance_cos(u.embedding, ?) as distance
+            SELECT u.id, u.university_name, u.country, u.city, u.university_url,
+                   u.undergraduate_programs, u.graduate_programs, u.tuition_undergrad,
+                   u.tuition_grad, u.living_cost, u.application_deadlines,
+                   u.admission_requirements, u.scholarships_international,
+                   u.scholarships_nepali, u.campus_facilities,
+                   vector_distance_cos(u.embedding, ?) as distance
             FROM universities u
             ORDER BY distance
             LIMIT ?
@@ -186,17 +269,29 @@ def search_vector_similarity(conn, entity_type: str, query_embedding, limit: int
         for row in rows:
             results.append({
                 "id": row[0],
-                "name": row[1],
+                "university_name": row[1],
                 "country": row[2],
-                "description": row[3],
-                "similarity_score": 1.0 - min(row[4] / 2.0, 1.0),
+                "city": row[3],
+                "university_url": row[4],
+                "undergraduate_programs": row[5],
+                "graduate_programs": row[6],
+                "tuition_undergrad": row[7],
+                "tuition_grad": row[8],
+                "living_cost": row[9],
+                "application_deadlines": row[10],
+                "admission_requirements": row[11],
+                "scholarships_international": row[12],
+                "scholarships_nepali": row[13],
+                "campus_facilities": row[14],
+                "similarity_score": 1.0 - min(row[15] / 2.0, 1.0),
             })
         return results
     elif entity_type == "course":
         cursor.execute(
             """
-            SELECT c.id, c.name, u.name, c.description, c.degree_type, c.field_of_study,
-                   c.starting_date, c.duration, c.fee_structure, c.language_of_study,
+            SELECT c.id, c.name, u.university_name, c.description, c.degree_type,
+                   c.field_of_study, c.duration, c.tuition_fee, c.application_deadline,
+                   c.admission_requirements, c.scholarships,
                    vector_distance_cos(c.embedding, ?) as distance
             FROM courses c
             JOIN universities u ON c.university_id = u.id
@@ -215,11 +310,12 @@ def search_vector_similarity(conn, entity_type: str, query_embedding, limit: int
                 "description": row[3],
                 "degree_type": row[4],
                 "field_of_study": row[5],
-                "starting_date": row[6],
-                "duration": row[7],
-                "fee_structure": row[8],
-                "language_of_study": row[9],
-                "similarity_score": 1.0 - min(row[10] / 2.0, 1.0),
+                "duration": row[6],
+                "tuition_fee": row[7],
+                "application_deadline": row[8],
+                "admission_requirements": row[9],
+                "scholarships": row[10],
+                "similarity_score": 1.0 - min(row[11] / 2.0, 1.0),
             })
         return results
     else:

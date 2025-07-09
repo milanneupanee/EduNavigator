@@ -66,41 +66,69 @@ class StructuredDataGenerator:
         conn = get_synced_conn()
         try:
             for university_data in data.get("universities", []):
-                # Extract university data
+                # Extract university data with new comprehensive schema
                 university_data_dict = {
-                    "name": university_data.get("university_name", ""),
                     "country": university_data.get("country", ""),
-                    "description": university_data.get("university_description", ""),
+                    "university_name": university_data.get("university_name", ""),
+                    "city": university_data.get("city", ""),
+                    "university_url": university_data.get("university_url", ""),
+                    "undergraduate_programs": university_data.get("undergraduate_programs", ""),
+                    "graduate_programs": university_data.get("graduate_programs", ""),
+                    "tuition_undergrad": university_data.get("tuition_undergrad", ""),
+                    "tuition_grad": university_data.get("tuition_grad", ""),
+                    "living_cost": university_data.get("living_cost", ""),
+                    "application_deadlines": university_data.get("application_deadlines", ""),
+                    "admission_requirements": university_data.get("admission_requirements", ""),
+                    "scholarships_international": university_data.get("scholarships_international", ""),
+                    "scholarships_nepali": university_data.get("scholarships_nepali", ""),
+                    "campus_facilities": university_data.get("campus_facilities", ""),
                 }
 
-                # Generate embedding for university
-                text_to_embed = f"University: {university_data_dict['name']}\nCountry: {university_data_dict['country']}\nDescription: {university_data_dict['description']}"
+                # Generate embedding for university using comprehensive data
+                text_to_embed = (
+                    f"University: {university_data_dict['university_name']}\n"
+                    f"Country: {university_data_dict['country']}\n"
+                    f"City: {university_data_dict['city']}\n"
+                    f"Undergraduate Programs: {university_data_dict['undergraduate_programs']}\n"
+                    f"Graduate Programs: {university_data_dict['graduate_programs']}\n"
+                    f"Tuition (UG): {university_data_dict['tuition_undergrad']}\n"
+                    f"Tuition (Grad): {university_data_dict['tuition_grad']}\n"
+                    f"Living Cost: {university_data_dict['living_cost']}\n"
+                    f"Admission Requirements: {university_data_dict['admission_requirements']}\n"
+                    f"Scholarships (International): {university_data_dict['scholarships_international']}\n"
+                    f"Scholarships (Nepali): {university_data_dict['scholarships_nepali']}\n"
+                    f"Campus Facilities: {university_data_dict['campus_facilities']}"
+                )
                 university_data_dict["embedding"] = generate_embedding(text_to_embed, 'RETRIEVAL_DOCUMENT')
 
                 # Insert university and get its ID
                 university_id = insert_university(conn, university_data_dict)
 
-                # Extract course data
+                # Extract course data with new simplified schema
                 course_data = {
                     "university_id": university_id,
                     "name": university_data.get("course_name", ""),
-                    "description": university_data.get("description", ""),
+                    "description": university_data.get("course_description", ""),
                     "degree_type": university_data.get("degree_type", ""),
-                    "starting_date": university_data.get("starting_date", ""),
-                    "duration": university_data.get("duration", ""),
-                    "scholarship": university_data.get("scholarship", ""),
-                    "fee_structure": university_data.get("fee_structure", ""),
-                    "language_of_study": university_data.get("language_of_study", ""),
                     "field_of_study": university_data.get("field_of_study", ""),
+                    "duration": university_data.get("duration", ""),
+                    "tuition_fee": university_data.get("tuition_fee", ""),
+                    "application_deadline": university_data.get("application_deadline", ""),
+                    "admission_requirements": university_data.get("course_admission_requirements", ""),
+                    "scholarships": university_data.get("course_scholarships", ""),
                 }
 
                 # Generate embedding for course
                 text_to_embed = (
                     f"Course: {course_data['name']}\n"
-                    f"University: {university_data_dict['name']}\n"
+                    f"University: {university_data_dict['university_name']}\n"
                     f"Field of Study: {course_data['field_of_study']}\n"
                     f"Degree Type: {course_data['degree_type']}\n"
-                    f"Description: {course_data['description']}"
+                    f"Description: {course_data['description']}\n"
+                    f"Duration: {course_data['duration']}\n"
+                    f"Tuition Fee: {course_data['tuition_fee']}\n"
+                    f"Admission Requirements: {course_data['admission_requirements']}\n"
+                    f"Scholarships: {course_data['scholarships']}"
                 )
                 course_data["embedding"] = generate_embedding(text_to_embed, 'RETRIEVAL_DOCUMENT')
 
@@ -109,7 +137,7 @@ class StructuredDataGenerator:
 
                 conn.commit()
                 logger.info(
-                    f"Stored data for university: {university_data_dict['name']}, course: {course_data['name']}"
+                    f"Stored data for university: {university_data_dict['university_name']}, course: {course_data['name']}"
                 )
 
         except Exception as e:

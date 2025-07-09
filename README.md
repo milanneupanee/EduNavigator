@@ -58,7 +58,7 @@ python main.py --mode process --raw-dir data/raw
 Start an interactive chat session to query university and course information:
 
 ```bash
-python main.py --mode chat
+python main.py --mode chat 
 ```
 
 ### 3. Semantic Search API

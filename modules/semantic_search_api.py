@@ -13,22 +13,34 @@ app = FastAPI(title="University and Course Semantic Search API")
 # Response models
 class University(BaseModel):
     id: int
-    name: str
+    university_name: str
     country: str
-    description: str
+    city: Optional[str] = None
+    university_url: Optional[str] = None
+    undergraduate_programs: Optional[str] = None
+    graduate_programs: Optional[str] = None
+    tuition_undergrad: Optional[str] = None
+    tuition_grad: Optional[str] = None
+    living_cost: Optional[str] = None
+    application_deadlines: Optional[str] = None
+    admission_requirements: Optional[str] = None
+    scholarships_international: Optional[str] = None
+    scholarships_nepali: Optional[str] = None
+    campus_facilities: Optional[str] = None
     similarity_score: float
 
 class Course(BaseModel):
     id: int
     name: str
     university_name: str
-    description: str
-    degree_type: str
-    field_of_study: str
-    starting_date: Optional[str] = None
+    description: Optional[str] = None
+    degree_type: Optional[str] = None
+    field_of_study: Optional[str] = None
     duration: Optional[str] = None
-    fee_structure: Optional[str] = None
-    language_of_study: Optional[str] = None
+    tuition_fee: Optional[str] = None
+    application_deadline: Optional[str] = None
+    admission_requirements: Optional[str] = None
+    scholarships: Optional[str] = None
     similarity_score: float
 
 class SearchResponse(BaseModel):
