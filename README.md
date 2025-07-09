@@ -30,8 +30,8 @@ export TURSO_AUTH_TOKEN="your_turso_auth_token"
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/university_data_system.git
-   cd university_data_system
+   git clone https://github.com/milanneupanee/EduNavigator.git
+   cd EduNavigator
    ```
 
 2. Install dependencies:
@@ -115,7 +115,7 @@ The system uses an LLM to detect if a user query is about universities, courses,
 ## Project Structure
 
 ```
-university_data_system/
+EduNavigator/
 ├── data/
 │   ├── raw/                  # Raw scraped data files
 │   ├── processed/            # Processed data (if needed)
@@ -130,7 +130,10 @@ university_data_system/
 │   ├── db_utils.py           # Database utilities
 │   └── gemini_utils.py       # Gemini API utilities
 ├── main.py                   # Main entry point
-└── requirements.txt          # Dependencies
+├── requirements.txt          # Dependencies
+│── Frontend                  # Frontend
+│   ├── public                # static assets of ReactJS
+│   └── src                   # source file
 ```
 
 ## Notes
